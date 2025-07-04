@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContentMapper - Interactive Tree UI</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+        .input-section {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: end;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-weight: 500;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        input, textarea {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .selector-section {
+            margin-bottom: 20px;
+        }
+        .selector-field {
+            width: 100%;
+            min-height: 60px;
+            font-family: monospace;
+            background: #f8f9fa;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            min-height: 400px;
+        }
+        .tree-panel {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+        .tree-panel h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        #tree {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #tree ul {
+            list-style: none;
+            padding-left: 20px;
+            margin: 0;
+        }
+        #tree li {
+            margin: 5px 0;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 3px;
+            border: 1px solid transparent;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            transition: all 0.2s;
+        }
+        #tree li:hover {
+            border-color: #007bff;
+            background: #f8f9fa;
+        }
+        .bg-include {
+            background: #d6ffd6 !important;
+            border-color: #4caf50;
+        }
+        .bg-exclude {
+            background: #ffd6d6 !important;
+            border-color: #f44336;
+        }
+        .preview-panel {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        .preview-panel h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .status-bar {
+            margin-top: 20px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .save-section {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .save-button {
+            background: #28a745;
+            padding: 12px 30px;
+            font-size: 16px;
+        }
+        .save-button:hover {
+            background: #1e7e34;
+        }
+        .loader {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ContentMapper - Interactive Tree UI</h1>
+            <p>ウェブページの構造を解析し、本文領域を選択できます</p>
+        </div>
+
+        <div class="input-section">
+            <div class="input-group">
+                <label for="url">URL</label>
+                <input type="url" id="url" placeholder="https://example.com/article">
+            </div>
+            <button id="fetch">Fetch</button>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 20px;">
+            <label for="body">本文テキスト（任意 - 初期ハイライト用）</label>
+            <textarea id="body" rows="3" placeholder="本文の一部を入力すると、該当ノードが自動でハイライトされます"></textarea>
+        </div>
+
+        <div class="selector-section">
+            <label for="selector">CSS Selector（自動生成）</label>
+            <textarea id="selector" class="selector-field" readonly placeholder="includeノードから自動生成されたCSSセレクタが表示されます"></textarea>
+        </div>
+
+        <div class="main-content">
+            <div class="tree-panel">
+                <h3>HTML構造ツリー</h3>
+                <div id="tree-loading" class="loader" style="display: none;">構造を解析中...</div>
+                <ul id="tree"></ul>
+            </div>
+
+            <div class="preview-panel">
+                <h3>プレビュー</h3>
+                <div id="preview-content">
+                    <p>ツリーノードをクリックして状態を変更してください：</p>
+                    <ul>
+                        <li><strong>1回クリック:</strong> Include（緑）- 本文として選択</li>
+                        <li><strong>2回クリック:</strong> Exclude（赤）- 除外として選択</li>
+                        <li><strong>3回クリック:</strong> None（デフォルト）- 未選択に戻る</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div id="status">URLを入力してFetchボタンを押してください</div>
+        </div>
+
+        <div class="save-section">
+            <button id="save" class="save-button">保存</button>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let currentTreeData = null;
+
+        // DOM要素の取得
+        const urlInput = document.getElementById('url');
+        const bodyInput = document.getElementById('body');
+        const selectorField = document.getElementById('selector');
+        const fetchButton = document.getElementById('fetch');
+        const saveButton = document.getElementById('save');
+        const treeContainer = document.getElementById('tree');
+        const treeLoading = document.getElementById('tree-loading');
+        const previewContent = document.getElementById('preview-content');
+        const status = document.getElementById('status');
+
+        // イベントリスナー
+        fetchButton.addEventListener('click', handleFetch);
+        saveButton.addEventListener('click', handleSave);
+
+        // Fetch処理
+        async function handleFetch() {
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('URLを入力してください');
+                return;
+            }
+
+            try {
+                updateStatus('サイトを解析中...');
+                treeLoading.style.display = 'block';
+                treeContainer.innerHTML = '';
+
+                // API呼び出し（現在はモック）
+                const response = await fetchAnalysis(url, bodyInput.value.trim());
+                currentTreeData = response.structure_tree;
+
+                // ツリーを描画
+                renderTree(currentTreeData, treeContainer);
+                updateSelectorField();
+                updateStatus('解析完了。ノードをクリックして本文領域を選択してください。');
+
+            } catch (error) {
+                updateStatus('エラー: ' + error.message);
+                console.error('Fetch error:', error);
+            } finally {
+                treeLoading.style.display = 'none';
+            }
+        }
+
+        // モックAPI（実際のAPIに置き換え予定）
+        async function fetchAnalysis(url, manualBody) {
+            await new Promise(resolve => setTimeout(resolve, 1500)); // 疑似的な待機
+
+            // モックデータ - 実際のAPIから返される構造
+            const mockTree = [
+                {
+                    tag: 'body',
+                    class: '',
+                    id: '',
+                    selector: 'body',
+                    preview: '',
+                    state: 'none',
+                    children: [
+                        {
+                            tag: 'header',
+                            class: 'site-header',
+                            id: '',
+                            selector: 'header.site-header',
+                            preview: 'サイトのヘッダー部分です',
+                            state: 'none',
+                            children: []
+                        },
+                        {
+                            tag: 'main',
+                            class: 'content',
+                            id: '',
+                            selector: 'main.content',
+                            preview: '',
+                            state: 'none',
+                            children: [
+                                {
+                                    tag: 'article',
+                                    class: 'post',
+                                    id: 'main-article',
+                                    selector: 'article.post#main-article',
+                                    preview: '今日は晴れだったので散歩に出かけました。公園では...',
+                                    state: manualBody && manualBody.includes('今日は晴れ') ? 'include' : 'none',
+                                    children: [
+                                        {
+                                            tag: 'h1',
+                                            class: 'title',
+                                            id: '',
+                                            selector: 'article.post#main-article h1.title',
+                                            preview: '散歩日記',
+                                            state: 'none',
+                                            children: []
+                                        },
+                                        {
+                                            tag: 'div',
+                                            class: 'post-content',
+                                            id: '',
+                                            selector: 'article.post#main-article div.post-content',
+                                            preview: '今日は晴れだったので散歩に出かけました...',
+                                            state: manualBody && manualBody.includes('今日は晴れ') ? 'include' : 'none',
+                                            children: []
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            tag: 'aside',
+                            class: 'sidebar',
+                            id: '',
+                            selector: 'aside.sidebar',
+                            preview: '広告やサイドバー情報',
+                            state: 'none',
+                            children: [
+                                {
+                                    tag: 'div',
+                                    class: 'ad',
+                                    id: '',
+                                    selector: 'aside.sidebar div.ad',
+                                    preview: '広告コンテンツです',
+                                    state: 'none',
+                                    children: []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ];
+
+            return {
+                status: 'success',
+                domain: new URL(url).hostname,
+                structure_tree: mockTree
+            };
+        }
+
+        // ツリー描画
+        function renderTree(nodes, parentElement) {
+            nodes.forEach(node => {
+                const li = document.createElement('li');
+                
+                // ノードラベルの生成
+                const label = createNodeLabel(node);
+                li.textContent = label;
+                
+                // データ属性の設定
+                li.dataset.selector = node.selector;
+                li.dataset.state = node.state || 'none';
+                
+                // 初期状態の反映
+                updateNodeAppearance(li, node.state || 'none');
+                
+                // クリックイベント
+                li.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleState(li);
+                });
+                
+                parentElement.appendChild(li);
+                
+                // 子要素がある場合は再帰的に描画
+                if (node.children && node.children.length > 0) {
+                    const ul = document.createElement('ul');
+                    li.appendChild(ul);
+                    renderTree(node.children, ul);
+                }
+            });
+        }
+
+        // ノードラベルの生成
+        function createNodeLabel(node) {
+            let label = node.tag;
+            if (node.class) label += '.' + node.class;
+            if (node.id) label += '#' + node.id;
+            
+            if (node.preview) {
+                const truncatedPreview = node.preview.length > 20 
+                    ? node.preview.substring(0, 20) + '...'
+                    : node.preview;
+                label += ` [${truncatedPreview}]`;
+            }
+            
+            return label;
+        }
+
+        // 3状態トグル関数
+        function toggleState(li) {
+            const curr = li.dataset.state || "none";
+            const next = curr === "none" ? "include" : curr === "include" ? "exclude" : "none";
+            
+            li.dataset.state = next;
+            updateNodeAppearance(li, next);
+            updateTreeData(li.dataset.selector, next);
+            updateSelectorField();
+            updatePreview();
+        }
+
+        // ノードの見た目更新
+        function updateNodeAppearance(li, state) {
+            li.classList.remove("bg-include", "bg-exclude");
+            if (state === "include") {
+                li.classList.add("bg-include");
+            } else if (state === "exclude") {
+                li.classList.add("bg-exclude");
+            }
+        }
+
+        // ツリーデータの状態更新
+        function updateTreeData(selector, state) {
+            if (!currentTreeData) return;
+            
+            function updateNodeState(nodes) {
+                nodes.forEach(node => {
+                    if (node.selector === selector) {
+                        node.state = state;
+                    }
+                    if (node.children) {
+                        updateNodeState(node.children);
+                    }
+                });
+            }
+            
+            updateNodeState(currentTreeData);
+        }
+
+        // CSSセレクタフィールドの更新
+        function updateSelectorField() {
+            if (!currentTreeData) return;
+            
+            const includeSelectors = [];
+            const excludeSelectors = [];
+            
+            function collectSelectors(nodes) {
+                nodes.forEach(node => {
+                    if (node.state === 'include') {
+                        includeSelectors.push(node.selector);
+                    } else if (node.state === 'exclude') {
+                        excludeSelectors.push(node.selector);
+                    }
+                    if (node.children) {
+                        collectSelectors(node.children);
+                    }
+                });
+            }
+            
+            collectSelectors(currentTreeData);
+            
+            let selector = includeSelectors.join(', ');
+            if (excludeSelectors.length > 0) {
+                const excludeParts = excludeSelectors.map(sel => `:not(${sel})`).join('');
+                if (selector) {
+                    selector = selector.split(', ').map(sel => sel + excludeParts).join(', ');
+                }
+            }
+            
+            selectorField.value = selector;
+        }
+
+        // プレビュー更新
+        function updatePreview() {
+            if (!currentTreeData) return;
+            
+            const includeNodes = [];
+            const excludeNodes = [];
+            
+            function collectNodes(nodes) {
+                nodes.forEach(node => {
+                    if (node.state === 'include') {
+                        includeNodes.push(node);
+                    } else if (node.state === 'exclude') {
+                        excludeNodes.push(node);
+                    }
+                    if (node.children) {
+                        collectNodes(node.children);
+                    }
+                });
+            }
+            
+            collectNodes(currentTreeData);
+            
+            let html = '<h4>選択状況</h4>';
+            html += `<p><strong>Include:</strong> ${includeNodes.length}個のノード</p>`;
+            html += `<p><strong>Exclude:</strong> ${excludeNodes.length}個のノード</p>`;
+            
+            if (includeNodes.length > 0) {
+                html += '<h5>Include ノード:</h5><ul>';
+                includeNodes.forEach(node => {
+                    html += `<li>${createNodeLabel(node)}</li>`;
+                });
+                html += '</ul>';
+            }
+            
+            previewContent.innerHTML = html;
+        }
+
+        // 保存処理
+        async function handleSave() {
+            const url = urlInput.value.trim();
+            const manualSelector = selectorField.value.trim();
+            const manualBody = bodyInput.value.trim();
+            
+            if (!url) {
+                alert('URLが入力されていません');
+                return;
+            }
+            
+            if (!manualSelector) {
+                alert('少なくとも1つのincludeノードを選択してください');
+                return;
+            }
+            
+            try {
+                updateStatus('保存中...');
+                
+                const data = {
+                    url: url,
+                    manual_selector: manualSelector,
+                    manual_body: manualBody
+                };
+                
+                // 実際のAPI呼び出し（現在はモック）
+                await saveConfiguration(data);
+                updateStatus('保存完了！');
+                
+            } catch (error) {
+                updateStatus('保存エラー: ' + error.message);
+                console.error('Save error:', error);
+            }
+        }
+
+        // モック保存API（実際のAPIに置き換え予定）
+        async function saveConfiguration(data) {
+            console.log('保存データ:', data);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 疑似的な待機
+            // 実際のAPIエンドポイント: POST /api/analyze
+        }
+
+        // ステータス更新
+        function updateStatus(message) {
+            status.textContent = message;
+        }
+    </script>
+</body>
+</html>
