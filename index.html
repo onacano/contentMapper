@@ -257,95 +257,26 @@
             }
         }
 
-        // モックAPI（実際のAPIに置き換え予定）
+        // 実際のAPI呼び出し
         async function fetchAnalysis(url, manualBody) {
-            await new Promise(resolve => setTimeout(resolve, 1500)); // 疑似的な待機
+            const response = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    url: url,
+                    manual_body: manualBody,
+                    force: false
+                })
+            });
 
-            // モックデータ - 実際のAPIから返される構造
-            const mockTree = [
-                {
-                    tag: 'body',
-                    class: '',
-                    id: '',
-                    selector: 'body',
-                    preview: '',
-                    state: 'none',
-                    children: [
-                        {
-                            tag: 'header',
-                            class: 'site-header',
-                            id: '',
-                            selector: 'header.site-header',
-                            preview: 'サイトのヘッダー部分です',
-                            state: 'none',
-                            children: []
-                        },
-                        {
-                            tag: 'main',
-                            class: 'content',
-                            id: '',
-                            selector: 'main.content',
-                            preview: '',
-                            state: 'none',
-                            children: [
-                                {
-                                    tag: 'article',
-                                    class: 'post',
-                                    id: 'main-article',
-                                    selector: 'article.post#main-article',
-                                    preview: '今日は晴れだったので散歩に出かけました。公園では...',
-                                    state: manualBody && manualBody.includes('今日は晴れ') ? 'include' : 'none',
-                                    children: [
-                                        {
-                                            tag: 'h1',
-                                            class: 'title',
-                                            id: '',
-                                            selector: 'article.post#main-article h1.title',
-                                            preview: '散歩日記',
-                                            state: 'none',
-                                            children: []
-                                        },
-                                        {
-                                            tag: 'div',
-                                            class: 'post-content',
-                                            id: '',
-                                            selector: 'article.post#main-article div.post-content',
-                                            preview: '今日は晴れだったので散歩に出かけました...',
-                                            state: manualBody && manualBody.includes('今日は晴れ') ? 'include' : 'none',
-                                            children: []
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            tag: 'aside',
-                            class: 'sidebar',
-                            id: '',
-                            selector: 'aside.sidebar',
-                            preview: '広告やサイドバー情報',
-                            state: 'none',
-                            children: [
-                                {
-                                    tag: 'div',
-                                    class: 'ad',
-                                    id: '',
-                                    selector: 'aside.sidebar div.ad',
-                                    preview: '広告コンテンツです',
-                                    state: 'none',
-                                    children: []
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ];
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+            }
 
-            return {
-                status: 'success',
-                domain: new URL(url).hostname,
-                structure_tree: mockTree
-            };
+            return await response.json();
         }
 
         // ツリー描画
@@ -542,11 +473,22 @@
             }
         }
 
-        // モック保存API（実際のAPIに置き換え予定）
+        // 実際の保存API
         async function saveConfiguration(data) {
-            console.log('保存データ:', data);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // 疑似的な待機
-            // 実際のAPIエンドポイント: POST /api/analyze
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
         }
 
         // ステータス更新
