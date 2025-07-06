@@ -34,7 +34,11 @@
 　公開 URL でツリー操作 → selector 保存成功
 ⬛️ フェーズ3 Secure & Reanalyze
 　Firebase Auth（制作者アカウントのみ）
+  フロントで ID トークン取得 → `Authorization: Bearer` ヘッダ
+  FastAPI ミドルウェアで検証（非認証は 401）
 　再解析ボタン `force=true`
+  フロントに「再解析」ボタン
+  API: クエリ `force=true` 受信でキャッシュ無視
 ⬜️ 完了基準
 　認証必須・再解析でキャッシュ更新
 ⬛️ フェーズ4 Polish
@@ -43,6 +47,8 @@
 　Locust で 50 req/min 耐性確認
 ⬛️ 後回し
 　本格監視 / Redis 多段キャッシュ / 課金プラン / AI モード (USE_AI=1)
+
+
 [# UI_SPEC]
 ■ レイアウト
 　┌ URL入力 ＋ Fetch ボタン
