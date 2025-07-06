@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import os
@@ -9,12 +10,27 @@ import json
 
 from database import init_database, get_content_map, save_content_map
 from analyzer import HTMLAnalyzer
+from auth import require_auth
 
 # FastAPIアプリケーションの初期化
 app = FastAPI(
     title="ContentMapper API",
     description="Web page structure analysis and content mapping API",
     version="1.0.0"
+)
+
+# CORS設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # データベース初期化
@@ -48,7 +64,7 @@ async def read_root():
 
 # メインAPIエンドポイント
 @app.post("/api/analyze", response_model=AnalyzeResponse)
-async def analyze_content(request: AnalyzeRequest):
+async def analyze_content(request: AnalyzeRequest, user: dict = Depends(require_auth)):
     """
     ウェブページを解析し、構造ツリーを返す
     
@@ -140,7 +156,7 @@ def apply_initial_highlight(structure_tree: list, manual_body: str) -> list:
 
 # 保存エンドポイント
 @app.post("/api/save")
-async def save_configuration(request: AnalyzeRequest):
+async def save_configuration(request: AnalyzeRequest, user: dict = Depends(require_auth)):
     """
     設定を保存
     """
@@ -170,7 +186,7 @@ async def save_configuration(request: AnalyzeRequest):
 
 # デバッグ用エンドポイント
 @app.get("/api/debug/content_maps")
-async def debug_content_maps():
+async def debug_content_maps(user: dict = Depends(require_auth)):
     """すべてのコンテンツマップを返す（デバッグ用）"""
     from database import get_all_content_maps
     return get_all_content_maps()

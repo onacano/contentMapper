@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ContentMapper - Interactive Tree UI</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <style>
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -24,6 +27,34 @@
             margin-bottom: 30px;
             border-bottom: 1px solid #eee;
             padding-bottom: 20px;
+        }
+        .auth-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .auth-section.authenticated {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+        .auth-section.unauthenticated {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+        .auth-user-info {
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+        .auth-buttons button {
+            margin: 0 5px;
+        }
+        .auth-input {
+            margin: 5px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
         .input-section {
             display: grid;
@@ -161,12 +192,37 @@
             <p>ウェブページの構造を解析し、本文領域を選択できます</p>
         </div>
 
+        <!-- 認証セクション -->
+        <div id="auth-section" class="auth-section unauthenticated">
+            <div id="auth-status">認証が必要です</div>
+            <div id="auth-login" style="display: none;">
+                <div class="auth-user-info">
+                    <span id="auth-user-email"></span>
+                    <div class="auth-buttons">
+                        <button id="logout-btn">ログアウト</button>
+                    </div>
+                </div>
+            </div>
+            <div id="auth-form">
+                <div>
+                    <input type="email" id="email" class="auth-input" placeholder="メールアドレス">
+                    <input type="password" id="password" class="auth-input" placeholder="パスワード">
+                </div>
+                <div class="auth-buttons">
+                    <button id="login-btn">ログイン</button>
+                    <button id="register-btn">新規登録</button>
+                </div>
+            </div>
+        </div>
+
         <div class="input-section">
             <div class="input-group">
                 <label for="url">URL</label>
-                <input type="url" id="url" placeholder="https://example.com/article">
+                <input type="url" id="url" placeholder="https://example.com/article" value="https://example.com">
             </div>
             <button id="fetch">Fetch</button>
+            <button id="reanalyze" style="background: #ffc107; color: #000;">再解析</button>
+            <button id="test-auth" style="background: #6c757d; color: #fff;">認証テスト</button>
         </div>
 
         <div class="input-group" style="margin-bottom: 20px;">
@@ -209,26 +265,195 @@
     </div>
 
     <script>
+        // 開発環境フラグ
+        const isDevelopment = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        
+        // Firebase設定
+        const firebaseConfig = {
+            // 本番環境では適切なFirebase設定を使用
+            apiKey: "your-api-key",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        };
+
+        // Firebase初期化（開発環境では初期化をスキップ）
+        let auth = null;
+        if (!isDevelopment) {
+            firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+        }
+
         // グローバル変数
         let currentTreeData = null;
+        let currentUser = null;
+        let idToken = null;
 
         // DOM要素の取得
         const urlInput = document.getElementById('url');
         const bodyInput = document.getElementById('body');
         const selectorField = document.getElementById('selector');
         const fetchButton = document.getElementById('fetch');
+        const reanalyzeButton = document.getElementById('reanalyze');
+        const testAuthButton = document.getElementById('test-auth');
         const saveButton = document.getElementById('save');
         const treeContainer = document.getElementById('tree');
         const treeLoading = document.getElementById('tree-loading');
         const previewContent = document.getElementById('preview-content');
         const status = document.getElementById('status');
 
+        // 認証関連の要素
+        const authSection = document.getElementById('auth-section');
+        const authStatus = document.getElementById('auth-status');
+        const authLogin = document.getElementById('auth-login');
+        const authForm = document.getElementById('auth-form');
+        const authUserEmail = document.getElementById('auth-user-email');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('login-btn');
+        const registerBtn = document.getElementById('register-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+
+        // 認証状態の監視
+        if (isDevelopment) {
+            // 開発環境では自動的に認証済み状態にする
+            currentUser = { email: 'dev@example.com', uid: 'dev-uid' };
+            idToken = 'dev-token';
+            showAuthenticatedState(currentUser);
+        } else if (auth) {
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentUser = user;
+                    idToken = await user.getIdToken();
+                    showAuthenticatedState(user);
+                } else {
+                    currentUser = null;
+                    idToken = null;
+                    showUnauthenticatedState();
+                }
+            });
+        } else {
+            showUnauthenticatedState();
+        }
+
+        // 認証済み状態の表示
+        function showAuthenticatedState(user) {
+            authSection.className = 'auth-section authenticated';
+            authStatus.textContent = '認証済み';
+            authUserEmail.textContent = user.email;
+            authLogin.style.display = 'block';
+            authForm.style.display = 'none';
+        }
+
+        // 未認証状態の表示
+        function showUnauthenticatedState() {
+            authSection.className = 'auth-section unauthenticated';
+            authStatus.textContent = '認証が必要です';
+            authLogin.style.display = 'none';
+            authForm.style.display = 'block';
+        }
+
+        // ログインボタンのイベント
+        loginBtn.addEventListener('click', async () => {
+            if (isDevelopment) {
+                // 開発環境では即座に認証済み状態にする
+                currentUser = { email: 'dev@example.com', uid: 'dev-uid' };
+                idToken = 'dev-token';
+                showAuthenticatedState(currentUser);
+                return;
+            }
+            
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            
+            if (!email || !password) {
+                alert('メールアドレスとパスワードを入力してください');
+                return;
+            }
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                emailInput.value = '';
+                passwordInput.value = '';
+            } catch (error) {
+                alert('ログインに失敗しました: ' + error.message);
+            }
+        });
+
+        // 新規登録ボタンのイベント
+        registerBtn.addEventListener('click', async () => {
+            if (isDevelopment) {
+                alert('開発環境では新規登録は無効です');
+                return;
+            }
+            
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            
+            if (!email || !password) {
+                alert('メールアドレスとパスワードを入力してください');
+                return;
+            }
+
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+                emailInput.value = '';
+                passwordInput.value = '';
+                alert('新規登録が完了しました');
+            } catch (error) {
+                alert('登録に失敗しました: ' + error.message);
+            }
+        });
+
+        // ログアウトボタンのイベント
+        logoutBtn.addEventListener('click', async () => {
+            if (isDevelopment) {
+                // 開発環境では未認証状態にする
+                currentUser = null;
+                idToken = null;
+                showUnauthenticatedState();
+                return;
+            }
+            
+            try {
+                await auth.signOut();
+            } catch (error) {
+                alert('ログアウトに失敗しました: ' + error.message);
+            }
+        });
+
         // イベントリスナー
         fetchButton.addEventListener('click', handleFetch);
+        reanalyzeButton.addEventListener('click', handleReanalyze);
+        testAuthButton.addEventListener('click', handleTestAuth);
         saveButton.addEventListener('click', handleSave);
+
+        // 認証テスト処理
+        function handleTestAuth() {
+            const info = {
+                isDevelopment: isDevelopment,
+                currentUser: currentUser,
+                idToken: idToken ? 'あり' : 'なし',
+                authSection: authSection.className
+            };
+            
+            console.log('認証状態:', info);
+            alert(`認証状態:
+開発環境: ${isDevelopment}
+ユーザー: ${currentUser ? currentUser.email : 'なし'}
+トークン: ${idToken ? 'あり' : 'なし'}
+認証セクション: ${authSection.className}`);
+        }
 
         // Fetch処理
         async function handleFetch() {
+            if (!isDevelopment && (!currentUser || !idToken)) {
+                alert('認証が必要です。先にログインしてください。');
+                return;
+            }
+
             const url = urlInput.value.trim();
             if (!url) {
                 alert('URLを入力してください');
@@ -240,7 +465,7 @@
                 treeLoading.style.display = 'block';
                 treeContainer.innerHTML = '';
 
-                // API呼び出し（現在はモック）
+                // API呼び出し
                 const response = await fetchAnalysis(url, bodyInput.value.trim());
                 currentTreeData = response.structure_tree;
 
@@ -257,17 +482,63 @@
             }
         }
 
+        // 再解析処理
+        async function handleReanalyze() {
+            if (!isDevelopment && (!currentUser || !idToken)) {
+                alert('認証が必要です。先にログインしてください。');
+                return;
+            }
+
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('URLを入力してください');
+                return;
+            }
+
+            try {
+                updateStatus('キャッシュを無視して再解析中...');
+                treeLoading.style.display = 'block';
+                treeContainer.innerHTML = '';
+
+                // API呼び出し（force=true）
+                const response = await fetchAnalysis(url, bodyInput.value.trim(), true);
+                currentTreeData = response.structure_tree;
+
+                // ツリーを描画
+                renderTree(currentTreeData, treeContainer);
+                updateSelectorField();
+                updateStatus('再解析完了。ノードをクリックして本文領域を選択してください。');
+
+            } catch (error) {
+                updateStatus('エラー: ' + error.message);
+                console.error('Reanalyze error:', error);
+            } finally {
+                treeLoading.style.display = 'none';
+            }
+        }
+
         // 実際のAPI呼び出し
-        async function fetchAnalysis(url, manualBody) {
+        async function fetchAnalysis(url, manualBody, force = false) {
+            if (!isDevelopment && !idToken) {
+                throw new Error('認証トークンが取得できません');
+            }
+
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // 開発環境以外では認証ヘッダーを追加
+            if (!isDevelopment && idToken) {
+                headers['Authorization'] = `Bearer ${idToken}`;
+            }
+
             const response = await fetch('/api/analyze', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: headers,
                 body: JSON.stringify({
                     url: url,
                     manual_body: manualBody,
-                    force: false
+                    force: force
                 })
             });
 
@@ -440,6 +711,11 @@
 
         // 保存処理
         async function handleSave() {
+            if (!isDevelopment && (!currentUser || !idToken)) {
+                alert('認証が必要です。先にログインしてください。');
+                return;
+            }
+
             const url = urlInput.value.trim();
             const manualSelector = selectorField.value.trim();
             const manualBody = bodyInput.value.trim();
@@ -463,7 +739,7 @@
                     manual_body: manualBody
                 };
                 
-                // 実際のAPI呼び出し（現在はモック）
+                // 実際のAPI呼び出し
                 await saveConfiguration(data);
                 updateStatus('保存完了！');
                 
@@ -475,10 +751,15 @@
 
         // 実際の保存API
         async function saveConfiguration(data) {
+            if (!idToken) {
+                throw new Error('認証トークンが取得できません');
+            }
+
             const response = await fetch('/api/save', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
                 },
                 body: JSON.stringify(data)
             });
