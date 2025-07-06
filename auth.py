@@ -86,7 +86,7 @@ async def require_auth(user = Depends(verify_firebase_token)):
         )
     
     # 許可されたユーザーかチェック
-    if user.get("email") not in ALLOWED_USERS:
+    if user["email"] not in ALLOWED_USERS:
         raise HTTPException(status_code=403, detail="Access denied")
     
     return user
